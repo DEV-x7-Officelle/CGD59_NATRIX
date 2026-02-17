@@ -1,11 +1,266 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mon site GitHub Pages</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intranet Gendarmerie</title>
+<style>
+:root{--bg:#f4f4f4;--card:#fff;--accent:#002855;--accent-2:#b8860b;--text:#222;}
+[data-theme="dark"]{--bg:#0f1720;--card:#0b1220;--accent:#0ea5a4;--accent-2:#b8860b;--text:#ddd;}
+body{margin:0;padding:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);}
+header{background:var(--accent);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;}
+nav a{color:#fff;margin-left:10px;font-weight:700;cursor:pointer;}
+nav a.hidden{display:none;}
+.container{display:flex;max-width:1200px;margin:20px auto;gap:20px;}
+.card{background:var(--card);padding:15px;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+input, select, textarea{width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #ccc;background:transparent;color:var(--text);}
+textarea{resize:vertical;}
+.profile{display:flex;flex-direction:column;align-items:center;gap:6px;width:220px;}
+.profile img{width:100px;height:100px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);}
+.profile input[type="file"]{margin-top:6px;}
+.toggle{width:50px;height:26px;background:#ddd;border-radius:999px;position:relative;cursor:pointer;}
+.toggle .knob{width:22px;height:22px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;}
+.toggle.on{background:var(--accent);}
+.toggle.on .knob{left:26px;}
+button{padding:8px 12px;border:none;border-radius:6px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;}
+button.alt{background:var(--accent-2);}
+.hidden{display:none;}
+.user-list{margin-top:10px;}
+.user-card{display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px;border:1px solid #ccc;border-radius:6px;}
+.user-card img{width:40px;height:40px;border-radius:50%;object-fit:cover;}
+</style>
 </head>
-<body>
-  <h1>Bienvenue sur mon site !</h1>
-  <p>Ceci est un site hébergé sur GitHub Pages.</p>
+<body data-theme="light">
+
+<header>
+  <h1>Intranet Gendarmerie</h1>
+  <nav>
+    <a id="nav-login">Connexion</a>
+    <a id="nav-form" class="hidden">Formulaire</a>
+    <a id="nav-mip" class="hidden">Gestion comptes MIP</a>
+    <a id="nav-logout" class="hidden">Déconnexion</a>
+  </nav>
+  <div class="toggle" id="themeToggle" title="Changer thème"><div class="knob"></div></div>
+</header>
+
+<div class="container">
+  <!-- Login -->
+  <div id="loginCard" class="card">
+    <h2>Connexion interne</h2>
+    <input id="username" placeholder="Identifiant">
+    <input id="password" placeholder="Mot de passe" type="password">
+    <button id="loginBtn">Se connecter</button>
+    <p id="loginError" style="color:red;display:none;">Identifiant ou mot de passe incorrect.</p>
+  </div>
+
+  <!-- Formulaire -->
+  <div id="formCard" class="card hidden" style="flex:1">
+    <h2 id="formTitle">MCGN - Prise de vacation</h2>
+    <label>Catégorie :</label>
+    <select id="categorySelect">
+      <option value="mcgn">MCGN - Prise de vacation</option>
+      <option value="rapport">Rapport de service</option>
+    </select>
+    <textarea id="formText" rows="12"></textarea>
+    <button id="sendForm">Envoyer</button>
+  </div>
+
+  <!-- Profil -->
+  <div class="profile card" id="profileCard">
+    <img id="profilePhoto" src="https://via.placeholder.com/100" alt="Photo Profil">
+    <strong id="profileName">—</strong>
+    <span id="profileGrade">—</span>
+    <label>Rôle :</label>
+    <select id="roleSelect"></select>
+    <label>Grade :</label>
+    <input id="gradeInput" type="text">
+    <label>Changer photo :</label>
+    <input type="file" id="photoInput" accept="image/*">
+    <h3>Utilisateurs :</h3>
+    <div id="userList" class="user-list"></div>
+  </div>
+
+  <!-- MIP création de compte -->
+  <div id="mipCard" class="card hidden">
+    <h2>Créer un compte</h2>
+    <input id="newId" placeholder="Identifiant">
+    <input id="newName" placeholder="Nom et prénom">
+    <input id="newPass" placeholder="Mot de passe" type="password">
+    <select id="newRole"></select>
+    <input id="newGrade" placeholder="Grade">
+    <button id="createUserBtn">Créer compte</button>
+  </div>
+</div>
+
+<script>
+const USERS_KEY = "intranet_users_v3";
+let currentUser = null;
+
+// ------------------ UTILITAIRES ------------------
+function saveUsers(users){ localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+function loadUsers(){ return JSON.parse(localStorage.getItem(USERS_KEY)||"[]"); }
+function notify(msg){ alert(msg); }
+
+// ------------------ INIT ------------------
+let users = loadUsers();
+if(users.length===0){
+  users.push({id:"mip1", mdp:"pass123", name:"Jean Dupont", grade:"Major", photo:"https://via.placeholder.com/100", role:"MIP"});
+  saveUsers(users);
+}
+
+// ------------------ RÔLES ------------------
+const ROLES = [
+  "Général d'armée","Général de corq d'armée","Général de division","Général de Brigade",
+  "Colonel","Lieutenant Colonel","Commandant","Capitaine","Lieutenant","Sous-Lieutenant","Aspirant",
+  "Major","Adjudant-Chef","Adjudant","Maréchal des Logis Chef","Gendarme de Carrière","Gendarme sous contrat",
+  "Maréchal des Logis","Brigadier Chef","Brigadier","GA1","GA2","MIP"
+];
+
+// ------------------ ELEMENTS ------------------
+const loginCard = document.getElementById("loginCard");
+const formCard = document.getElementById("formCard");
+const profileCard = document.getElementById("profileCard");
+const mipCard = document.getElementById("mipCard");
+const loginError = document.getElementById("loginError");
+const loginBtn = document.getElementById("loginBtn");
+const navForm = document.getElementById("nav-form");
+const navMip = document.getElementById("nav-mip");
+const navLogout = document.getElementById("nav-logout");
+const profileName = document.getElementById("profileName");
+const profileGrade = document.getElementById("profileGrade");
+const profilePhoto = document.getElementById("profilePhoto");
+const roleSelect = document.getElementById("roleSelect");
+const gradeInput = document.getElementById("gradeInput");
+const photoInput = document.getElementById("photoInput");
+const userList = document.getElementById("userList");
+const newId = document.getElementById("newId");
+const newName = document.getElementById("newName");
+const newPass = document.getElementById("newPass");
+const newRole = document.getElementById("newRole");
+const newGrade = document.getElementById("newGrade");
+const createUserBtn = document.getElementById("createUserBtn");
+const categorySelect = document.getElementById("categorySelect");
+const formText = document.getElementById("formText");
+const sendForm = document.getElementById("sendForm");
+
+// ------------------ THEME ------------------
+const themeToggle = document.getElementById("themeToggle");
+function applyTheme(theme){
+  document.body.setAttribute("data-theme", theme);
+  themeToggle.classList.toggle("on", theme==="dark");
+}
+themeToggle.onclick = ()=>applyTheme(document.body.getAttribute("data-theme")==="light"?"dark":"light");
+applyTheme("light");
+
+// ------------------ LOGIN ------------------
+loginBtn.onclick = ()=>{
+  const u = document.getElementById("username").value.trim();
+  const p = document.getElementById("password").value.trim();
+  const user = users.find(x=>x.id===u && x.mdp===p);
+  if(!user){ loginError.style.display="block"; return; }
+  currentUser = user;
+  loginCard.classList.add("hidden");
+  formCard.classList.remove("hidden");
+  navForm.classList.remove("hidden");
+  navLogout.classList.remove("hidden");
+  loginError.style.display="none";
+
+  // Profil
+  profileName.textContent = user.name;
+  profileGrade.textContent = user.grade;
+  gradeInput.value = user.grade;
+  profilePhoto.src = user.photo || "https://via.placeholder.com/100";
+
+  // Rôle
+  roleSelect.innerHTML="";
+  ROLES.forEach(r=>{
+    const o = document.createElement("option"); o.value=r; o.textContent=r;
+    if(r===user.role) o.selected=true;
+    roleSelect.appendChild(o);
+  });
+
+  // Affichage utilisateurs
+  renderUserList();
+
+  // MIP : afficher gestion comptes
+  if(user.role==="MIP"){ navMip.classList.remove("hidden"); mipCard.classList.remove("hidden"); }
+  else{ navMip.classList.add("hidden"); mipCard.classList.add("hidden"); }
+
+  // Préparer création comptes
+  newRole.innerHTML="";
+  ROLES.forEach(r=>{const o=document.createElement("option");o.value=r;o.textContent=r;newRole.appendChild(o);});
+};
+
+// ------------------ LISTE UTILISATEURS ------------------
+function renderUserList(){
+  userList.innerHTML="";
+  users.forEach(u=>{
+    const div=document.createElement("div"); div.className="user-card";
+    div.innerHTML=`<img src="${u.photo||'https://via.placeholder.com/100'}"><strong>${u.name}</strong> - <em>${u.grade}</em> - <span>${u.role}</span>`;
+    userList.appendChild(div);
+  });
+}
+
+// ------------------ ROLE / GRADE / PHOTO ------------------
+roleSelect.onchange = ()=>{
+  if(currentUser){ currentUser.role = roleSelect.value; saveUsers(users); notify("Rôle modifié !"); }
+};
+gradeInput.onchange = ()=>{
+  if(currentUser){ currentUser.grade=gradeInput.value; profileGrade.textContent=currentUser.grade; saveUsers(users); }
+};
+photoInput.onchange = ()=>{
+  if(currentUser && photoInput.files[0]){
+    const reader=new FileReader();
+    reader.onload=e=>{currentUser.photo=e.target.result; profilePhoto.src=e.target.result; saveUsers(users); renderUserList();}
+    reader.readAsDataURL(photoInput.files[0]);
+  }
+};
+
+// ------------------ DECONNEXION ------------------
+navLogout.onclick = ()=>{
+  currentUser=null;
+  loginCard.classList.remove("hidden");
+  formCard.classList.add("hidden");
+  mipCard.classList.add("hidden");
+  navForm.classList.add("hidden");
+  navMip.classList.add("hidden");
+  navLogout.classList.add("hidden");
+};
+
+// ------------------ CREATION UTILISATEUR MIP ------------------
+createUserBtn.onclick = ()=>{
+  if(!currentUser || currentUser.role!=="MIP"){ notify("Non autorisé !"); return; }
+  const id=newId.value.trim(), name=newName.value.trim(), mdp=newPass.value.trim(), role=newRole.value, grade=newGrade.value.trim();
+  if(!id||!name||!mdp){ notify("Remplir tous les champs !"); return; }
+  if(users.find(u=>u.id===id)){ notify("Identifiant déjà utilisé !"); return; }
+  users.push({id,mdp,name,grade,role,photo:"https://via.placeholder.com/100"});
+  saveUsers(users);
+  notify("Compte créé !");
+  newId.value=""; newName.value=""; newPass.value=""; newGrade.value="";
+  renderUserList();
+};
+
+// ------------------ FORMULAIRE ------------------
+const WEBHOOKS = {
+  mcgn:"https://discord.com/api/webhooks/1473014637367791774/XZ8tB6wBxgrqYIXyddWr8v-VXKCJpcmoQEKowWpG6sttlj_wPxxKg12vZyiTorCOMeBb",
+  rapport:"https://discord.com/api/webhooks/1473017689038393548/eTEtZCwBc_navoieJtqUjx0CeWO0CPb20yylQFK_Exki_cl63LZk3rHrL1Y6LD6S4P8t"
+};
+categorySelect.onchange = ()=>{
+  if(categorySelect.value==="mcgn"){
+    formText.value = `# MCGN - PRISE DE VACATION\n\n**---------------------------**\n\nINDICATIF DE L'ÉQUIPAGE : a remplir\n\nDATE : a remplir\n\nHEURE : a remplir\n\nCONDUCTEUR :\n-# a remplir\n\nCHEF DE BORD :\n-# a remplir\n\nÉQUIPIER 01 : \n-# a remplir\n\nVÉHICULES :\n-# a remplir\n\nÉQUIPEMENTS COLLECTIFS : a remplir`;
+  }else if(categorySelect.value==="rapport"){
+    formText.value = `# RAPPORT DE SERVICE\n\nNom : a remplir\nGrade : a remplir\nDate : a remplir\nContenu : a remplir`;
+  }
+};
+categorySelect.onchange();
+sendForm.onclick = async ()=>{
+  if(!currentUser){ notify("Connectez-vous !"); return; }
+  const txt=formText.value.trim();
+  if(!txt){ notify("Remplir le formulaire !"); return; }
+  const webhook=WEBHOOKS[categorySelect.value];
+  try{ await fetch(webhook,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:txt})}); notify("Formulaire envoyé !"); formText.value=""; }
+  catch(e){ notify("Erreur envoi !"); console.error(e); }
+};
+</script>
 </body>
 </html>
